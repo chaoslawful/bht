@@ -1,0 +1,6 @@
+*.d
+*.o
+gen-cpp
+bht_server
+libbht.so
+

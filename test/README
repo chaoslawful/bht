@@ -1,0 +1,40 @@
+本目录放置 BHT 所有的单元测试文件。
+
+BHT 系统的主要开发语言为 C++，因此单元测试使用 CppUnit 进行。单独的单元测
+试套件命名符合如下正则式：
+
+	[0-9]{2}_\w*.h	单个单元测试套件头文件
+	[0-9]{2}_\w*.cc	单个单元测试套件实现
+
+文件名中开头的 2 位数字必须唯一，用来快速找出某个单元测试；下划线后跟一个描
+述性字符串，简要说明针对的模块名称以及测试种类。每个单元测试套件类名称必须唯
+一。
+
+运行单元测试可以采取如下步骤：
+
+	gmake test	# 输出测试运行结果
+或
+	gmake		# 生成测试运行文件 runtest
+	./runtest	# 输出测试运行结果
+
+创建新的单元测试套件时可以利用 skel/ 目录中的模版文件：
+
+	skel/unit.ht	单元测试套件头文件模版
+	skel/unit.cct	单元测试套件实现模版
+
+使用时将这两个文件复制到本目录下按照单元测试命名规则予以更名，随后对文件内容
+进行相应的更改即可。例如我们要对 Config 模块创建一个新的取值测试，那
+么单元测试套件类可取名为 ConfigGetValueTest，而已有单元测试套件的最大序
+号为 01，那么新建单元测试的序号可定为 02，具体操作步骤如下：
+
+	cp skel/ut.ht 02_config_get.h
+	cp skel/ut.cct 02_config_get.cc
+	vi 02_config_get.h # 把所有 UnitTest 类名都改为 ConfigGetValueTest
+					   # 更改头文件保护宏名称，增加测试用例函数声明
+	vi 02_config_get.cc # 把所有 UnitTest 类名都改为 ConfigGetValueTest
+					   # 增加测试用例函数实现
+	gmake # 创建单元测试运行程序 runtest 并执行
+
+CppUnit 的所有断言可以在这里找到：
+http://cppunit.sourceforge.net/doc/lastest/group___assertions.html
+

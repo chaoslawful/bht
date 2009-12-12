@@ -1,0 +1,164 @@
+#!/bin/bash
+prog="bht_relay_remote_ctl"
+cmd="$(ROOT)/bin64/ttserver"
+port="$(bht_relay_remote__ttserver_port)"
+logdir="$(ROOT)/logs/bht_relay"
+datadir="$(ROOT)/var/bht_relay"
+pidfile="$logdir/relay_remote_ttserver.pid"
+logfile="$logdir/relay_remote_ttserver.log"
+ulogdir="$datadir/relay_remote_ulog"
+rtsfile="$datadir/relay_remote.rts"
+dbname="$datadir/relay_remote.tcb#opts=l#bnum=10485760#lcnum=32768#ncnum=16384#xmsiz=268435456"
+skelpath="$(ROOT)/libexec64/bhtskelrelay.so"
+thnum="$(bht_relay_remote__ttserver_worker_num)"
+ulimsiz="256m" 	# 每个update log文件的最大尺寸
+retval=0
+
+LANG=C
+LC_ALL=C
+PATH="$PATH:$(ROOT)/bin64:$(ROOT)/sbin64:$(ROOT)/bin:$(ROOT)/sbin:/sbin:/usr/sbin:/usr/local/sbin"
+export LANG LC_ALL PATH
+
+# start the server
+start()
+{
+	printf "Starting the BHT relay_remote server (Tokyo Tyrant)\n"
+	if [ -f "$pidfile" ] ; then
+		# PID文件已经存在，检查对应进程是否真的存在，若进程已不存在则删除PID文件
+		pid=`cat "$pidfile"`
+		kill -0 $pid
+		if [ "$?" -eq 0 ]; then
+			# 可以向对应PID发送信号，进程存在，检查其是否真的是ttserver
+			ps -p $pid|grep ttserver >/dev/null
+			if [ "$?" -eq 0 ]; then
+				# 进程存在且为ttserver，不允许启动
+				printf "Existing process: %d\n" "$pid"
+				retval=1
+				return
+			else
+				# 进程存在但不为ttserver，删除PID文件
+				printf "Removing existed pid file: %s\n" "$pidfile"
+				rm -f $pidfile
+			fi
+		else
+			# 不能向对应PID发送信号，进程不存在，删除PID文件
+			printf "Removing existed pid file: %s\n" "$pidfile"
+			rm -f $pidfile
+		fi
+	fi
+
+	cmd="$cmd -port $port -dmn -pid $pidfile -thnum $thnum"
+	if [ -n "$logfile" ] ; then
+		cmd="$cmd -log $logfile"
+	fi
+	if [ -n "$ulogdir" ] ; then
+		cmd="$cmd -ulog $ulogdir"
+	fi
+	if [ -n "$ulimsiz" ] ; then
+		cmd="$cmd -ulim $ulimsiz"
+	fi
+	if [ -n "$mhost" ] ; then
+		cmd="$cmd -mhost $mhost"
+	fi
+	if [ -n "$mport" ] ; then
+		cmd="$cmd -mport $mport"
+	fi
+	if [ -n "$rtsfile" ] ; then
+		cmd="$cmd -rts $rtsfile"
+	fi
+	if [ -n "$skelpath" ] ; then
+		cmd="$cmd -skel $skelpath"
+	fi
+	cmd="$cmd $dbname"
+	printf "Executing: %s\n" "$cmd"
+	$cmd
+	if [ "$?" -eq 0 ] ; then
+		printf "Done\n"
+	else
+		printf "The server could not started\n"
+		retval=1
+	fi
+}
+
+# stop the server
+stop()
+{
+	printf "Stopping the BHT relay_remote server (Tokyo Tyrant)\n"
+	if [ -f "$pidfile" ] ; then
+		pid=`cat "$pidfile"`
+		printf "Sending the terminal signal to the process: %s\n" "$pid"
+		kill -TERM "$pid"
+		c=0
+		while true ; do
+			sleep 0.1
+			if [ -f "$pidfile" ] ; then
+				c=`expr $c + 1`
+				if [ "$c" -ge 100 ] ; then
+					printf "Hanging process: %d\n" "$pid"
+					retval=1
+					break
+				fi
+			else
+				printf "Done\n"
+				break
+			fi
+		done
+	else
+		printf "No process found\n"
+		retval=1
+	fi
+}
+
+# send HUP to the server for log rotation
+hup()
+{
+	printf "Sending HUP signal to the BHT relay_remote server (Tokyo Tyrant)\n"
+	if [ -f "$pidfile" ] ; then
+		pid=`cat "$pidfile"`
+		printf "Sending the hangup signal to the process: %s\n" "$pid"
+		kill -HUP "$pid"
+		printf "Done\n"
+	else
+		printf "No process found\n"
+		retval=1
+	fi
+}
+
+if [ -d "$logdir" ] && [ -d "$datadir" ]; then
+	if ! touch "$logdir/$$" >/dev/null 2>&1; then
+		printf "Log directory permission denied: %s\n" "$logdir"
+		exit 1
+	fi
+	rm -f "$logdir/$$"
+
+	if ! touch "$datadir/$$" >/dev/null 2>&1; then
+		printf "Data directory permission denied: %s\n" "$datadir"
+		exit 1
+	fi
+	rm -f "$datadir/$$"
+fi
+
+case "$1" in
+	start)
+		start
+		$(ROOT)/bin64/bht_relay_remote -d -m remote -c $(ROOT)/conf/bht_relay/remote.conf
+		;;
+	stop)
+		killall bht_relay_remote
+		stop
+		;;
+	restart)
+		stop
+		start
+		;;
+	hup)
+		hup
+		;;
+	*)
+		printf "Usage: %s {start|stop|restart|hup}\n" "$prog"
+		exit 1
+		;;
+esac
+
+exit "$retval"
+

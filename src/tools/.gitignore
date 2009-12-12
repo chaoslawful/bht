@@ -1,0 +1,6 @@
+*.d
+*.o
+*.so
+gen-cpp
+bht_tool
+bht_db_clean
